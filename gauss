@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Aug 17 21:23:08 2020
+
+@author: sk
+"""
+
+from numpy.random import random, normal, choice, uniform
+#from sympy import lambdify, Symbol
+
+
+from symengine import *
+#from sympy import *
+
+import sys
+import math
+import numpy as np
+import multiprocessing as mp
+import pickle
+
+
+from sympy import re #, evalf, lambdify
+
+err = 9e9
+
+#from symengine import sympify, Lambdify
+
+
+x = Symbol('x')
+y = Symbol('y')
+z = Symbol('z')
+
+N = 5 # cuantos kernels
+
+# d = 1 -> wi*exp(-ki*(x-ci))
+def individuo(genes): # [[genes1],[genes2],...]
+    res = []
+    for g in genes:
+        res.append(sympify(g[0]*exp(-g[1]*(x-g[2]))))
+    return sum(res)
+        
+
+def caldo(cuantos):
+    mundo = []
+    global N
+    for _ in range(cuantos):
+        res = []
+        for _ in range(N):
+            res.append([round( normal(0, max([abs(x0[0]),abs(y0[0])])) ,precision) for _ in range(3)])
+        mundo.append(res)
+    return mundo
+
+
+
+# ecuacion
+def fitness(f):
+    
+    try:
+        
+        ecuacion = abs(f.diff(x,1)-sin(x*f))
+        pvi = 0
+        
+        for i in range(len(x0)):
+            fvi = deriva(f,i)(x0[i]).item(0)
+            vi = (y0[i]-fvi)
+            if str(vi) == str(1e400*0) or str(vi) == "zoo": #math.isnan(vi)
+                return err
+            pvi += abs(re(vi))
+        
+    except:
+        return err
+        
+    
+    
+    return (ecuacion+pvi)
+
+def deriva(f,n):
+    return Lambdify(x,f) if n==0 else Lambdify(x,f.diff(x,n))
+
+
+def cero(f):
+    return suma(deriva(f,0)(xk))
+
+def condicion(array):
+    res = 0
+    for a in array: 
+        if a < 0.1: res+=1
+    return res
+
+# evalua candidato en todos puntos
+def fitea(genes):
+    
+    f = sympify(individuo(genes))
+    
+    global xk
+    val = 0
+    
+    escero = 0
+    
+    f = sympify(f)
+    #print("voy con ",f)
+    try:
+        fu = Lambdify(x,fitness(f))
+        val = sum(fu(xk))
+        
+        # ver si f -> 0 
+        #arr = deriva(f,0)(xk[:int(len(xk)/2)])
+        arr = deriva(f,0)(xk)
+    except:
+        print("1 xd")
+        return err
+    
+    
+    #val = sum(arr)
+    
+    if str(val) == str(1e400*0) or val==math.inf: #math.isnan(val)
+        print("3")
+        return err
+    """
+    if escero<5/2 * Dominio:
+        return err
+    """
+    #if condicion(arr)/len(arr)  > 0.99:
+    #    return err
+    return val
+ 
+    
+
+def evalua(mundo):
+    pool = mp.Pool(mp.cpu_count())
+    try:
+        results = pool.map(fitea, [ m for m in mundo ])
+    except:
+        print("feil")
+    pool.close()
+    return [[results[i],i] for i in range(len(results))]
+
+
+
+
+def mejores(cuantos, mundo, lista):
+    res = []
+    for i in range(cuantos):
+        res.append(mundo[lista[i][1]])
+    return res
+
+
+def cruza(mejores):
+    res = []
+    for m in mejores:
+        res.append(m)
+    return res
+    
+    
+    
+
+
+        
+#x0, y0 = -1,-1 # condicion inicial
+#x0, y0 = 0,0 # condicion inicial
+#x0, y0 = 0.1, 2.1/sin(0.1) 
+
+x0 = [0]
+y0 = [1]
+#y0 = [20.1]
+#x1, y1 = 0,10
+#x0, y0 = 0.1, 20.1
+
+Dominio = 5
+[a,b] = [x0[0], x0[0]+Dominio] # Dominio de t
+Discretizacion = 99
+#h = Dominio/Discretizacion # discretizacion 
+
+precision = 4
+xk = sorted(uniform(a, b, Discretizacion))
+
+
+M = [] # M de funciones
+
+personas = 1000
+    
+Va = []
+
+#mejores = []
+
+
+####################################################################
+####################################################################
+
+
+
+def mundo1(I, generaciones):
+    mundo = caldo(I)
+    reserva = selecciona(eevaluaop(caldo(1)),20)
+    #reserva1 = selecciona(eevaluaop(caldo(-1)),20)
+    
+    
+    
+    for i in range(generaciones):
+        
+        print("------------------  GENERACIONNN: ",i," ------------------------------------")
+        """
+        Va = eevaluaop(mundo)
+    
+        print("fin evalua, cogo mejores")
+        mej = selecciona(Va,100)+reserva
+        print("LOS MEJORES ",funciones(mej))
+        mun = cruza(mej)
+        """
+        Va = evalua(mundo)
+        print("fin evalua, cogo mejores")
+        
+        mej = best(mundo,sorted(Va),50)+reserva
+        print(funciones(mej))
+        
+        print("voy a cruzar")
+        pesos = [0.1,0.4,0.3,0.2]
+        mun = cruzaop(mej, pesos)+mej
+        
+        #print("")
+        #print("")
+        #print("ganador: ", mejores[0][0], " fit: ", fit(mejores[0][0]))
+    
+        print("voy a crivar")
+        
+        mundo = criva(mun)
+        #mundo = limpia(mundo)
+    
+        #print("cruzados ", funciones(mundo))
+        
+        if fitea(mej[0][0])<1e-3:
+            print("yata no sigas, aki ta ", mej[0])
+            break
+        #sleep(5)
+    
+    ganador = selecciona(eevaluaop(mundo),1)
+    print("el ganador: ", sympify(ganador[0][0]))
+    print(" con val ", fitea(ganador[0][0]))
+
